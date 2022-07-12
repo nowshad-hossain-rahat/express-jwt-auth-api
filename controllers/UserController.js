@@ -17,7 +17,7 @@ class UserController {
     // if any user exists with this email, then send error message
     if (user) {
 
-      res.status(400).send({
+      res.send({
         status: 'failed',
         code: 'USER_EXISTS',
         message: 'User already exists!'
@@ -29,7 +29,7 @@ class UserController {
 
         if (password !== confirm_password) {
 
-          res.status(400).send({
+          res.send({
             status: 'failed',
             code: 'PASS_MISMATCH',
             message: "Two passwords didn't match!"
@@ -41,22 +41,30 @@ class UserController {
             // creating a new user
             const hash = CryptoJS.HmacSHA256(password, '#SK+[password/parser]+(NHR)');
             const passHashed = hash.toString(CryptoJS.enc.Base64);
-            
+
             await (new UserModel({
               username,
               password: passHashed,
               email
             })).save();
 
-            res.status(200).send({
+            const savedUser = await UserModel.findOne({email});
+            const token = jwt.sign(
+              { id: savedUser._id },
+              process.env.JWT_SK,
+              { expiresIn: '10m' }
+            );
+
+            res.status(201).send({
               status: 'success',
               code: 'SIGNUP_SUCCESSFUL',
+              jwt: token,
               message: 'Signup successful!'
             });
 
           } catch (err) {
 
-            res.status(400).send({
+            res.send({
               status: 'failed',
               code: 'UNKNOWN_ERROR',
               message: err.message
@@ -68,13 +76,79 @@ class UserController {
 
       } else {
 
-        res.status(400).send({
+        res.send({
           status: 'failed',
           code: 'EMPTY_FIELD',
           message: 'All fields are required!'
         });
 
       }
+
+    }
+
+  };
+
+  static signin = async (req, res) => {
+
+    const { usernameOrEmail, password } = req.query;
+
+    if (usernameOrEmail && password) {
+
+      const user = await UserModel.findOne({
+        $or: [
+          { username: usernameOrEmail },
+          { email: usernameOrEmail }
+        ]
+      });
+
+      // if any user exists with this email, then send error message
+      if (user) {
+
+        const hash = CryptoJS.HmacSHA256(password, '#SK+[password/parser]+(NHR)');
+        const passHashed = hash.toString(CryptoJS.enc.Base64);
+
+        if (user.password !== passHashed) {
+
+          res.send({
+            status: 'failed',
+            code: 'INVALID_CREDENTIALS',
+            message: "Invalid signin credentials!"
+          });
+
+        } else {
+
+          const token = jwt.sign(
+            { id: user._id },
+            process.env.JWT_SK,
+            { expiresIn: '10m' }
+          );
+
+          res.status(201).send({
+            status: 'success',
+            code: 'SIGNIN_SUCCESSFUL',
+            jwt: token,
+            message: 'Signin successful!'
+          });
+
+        }
+
+      } else {
+
+        res.send({
+          status: 'failed',
+          code: 'INVALID_CREDENTIALS',
+          message: 'Invalid signin credentials!'
+        });
+
+      }
+
+    } else {
+
+      res.send({
+        status: 'failed',
+        code: 'EMPTY_FIELD',
+        message: 'All fields are required!'
+      });
 
     }
 
