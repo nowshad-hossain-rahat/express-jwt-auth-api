@@ -91,7 +91,7 @@ class UserController {
   static signin = async (req, res) => {
 
     const { usernameOrEmail, password } = req.query;
-
+    
     if (usernameOrEmail && password) {
 
       const user = await UserModel.findOne({
