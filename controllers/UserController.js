@@ -6,7 +6,7 @@ class UserController {
 
   static signup = async (req, res) => {
 
-    const { username, password, confirm_password, email, tc } = req.body;
+    const { username, password, confirmPassword, email, tc } = req.body;
     const user = await UserModel.findOne({
       $or: [
         { username },
@@ -25,9 +25,9 @@ class UserController {
 
     } else {
       // check if all the fields are filled
-      if (username && password && confirm_password && email && tc) {
+      if (username && password && confirmPassword && email && tc) {
 
-        if (password !== confirm_password) {
+        if (password !== confirmPassword) {
 
           res.send({
             status: 'failed',
@@ -52,7 +52,7 @@ class UserController {
             const token = jwt.sign(
               { id: savedUser._id },
               process.env.JWT_SK,
-              { expiresIn: '10m' }
+              { expiresIn: '1d' }
             );
 
             res.status(201).send({
@@ -91,7 +91,7 @@ class UserController {
   static signin = async (req, res) => {
 
     const { usernameOrEmail, password } = req.query;
-    
+
     if (usernameOrEmail && password) {
 
       const user = await UserModel.findOne({
@@ -120,7 +120,7 @@ class UserController {
           const token = jwt.sign(
             { id: user._id },
             process.env.JWT_SK,
-            { expiresIn: '10m' }
+            { expiresIn: '1d' }
           );
 
           res.status(201).send({
@@ -150,6 +150,72 @@ class UserController {
         message: 'All fields are required!'
       });
 
+    }
+
+  };
+
+  static changePassword = async (req, res) => {
+
+    const { userId, currentPassword, newPassword, confirmNewPassword } = req.body;
+
+    if (!userId) {
+      res.send({
+        status: 'failed',
+        code: 'UNAUTHORIZED_USER',
+        message: 'User is unauthorized!'
+      });
+    } else if (currentPassword && newPassword && confirmNewPassword) {
+
+      let user = await UserModel.findOne({ _id: userId });
+
+      let hash = CryptoJS.HmacSHA256(currentPassword, '#SK+[password/parser]+(NHR)');
+      let passHashed = hash.toString(CryptoJS.enc.Base64);
+
+      if (newPassword !== confirmNewPassword) {
+
+        res.send({
+          status: 'failed',
+          code: 'PASS_MISMATCH',
+          message: "Two passwords didn't match!"
+        });
+
+      } else if (user.password !== passHashed) {
+
+        res.send({
+          status: 'failed',
+          code: 'INVALID_PASSWORD',
+          message: 'Current password is invalid!'
+        });
+
+      } else {
+
+        let newHash = CryptoJS.HmacSHA256(newPassword, '#SK+[password/parser]+(NHR)');
+        let newPassHashed = newHash.toString(CryptoJS.enc.Base64);
+        UserModel.findOneAndUpdate({ _id: userId }, { $set: { password: newPassHashed } })
+        .then((doc) => {
+          res.send({
+            status: 'success',
+            code: 'PASSWORD_CHANGED',
+            message: 'Password changed successfully!'
+          });
+        })
+        .catch((err) => {
+          res.send({
+            status: 'failed',
+            code: 'UNKNOWN_ERROR',
+            message: err.message
+          });
+        })
+      }
+
+    } else {
+
+      res.send({
+        status: 'failed',
+        code: 'EMPTY_FIELD',
+        message: 'All fields are required!'
+      });
+      
     }
 
   };
